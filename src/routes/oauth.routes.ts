@@ -9,7 +9,7 @@ export const oauthRouter = Router();
 
 interface OAuthGrant {
   code: string;
-  codeChallenge: string;
+  codeChallenge?: string;
   userId: string;
   expiresAt: number;
 }
@@ -21,8 +21,8 @@ const authorizeSchema = z.object({
   client_id: z.string(),
   redirect_uri: z.string().url(),
   state: z.string(),
-  code_challenge: z.string(),
-  code_challenge_method: z.literal('S256'),
+  code_challenge: z.string().optional(),
+  code_challenge_method: z.enum(['S256', 'plain']).optional(),
   scope: z.string().optional(),
 });
 
@@ -105,8 +105,10 @@ oauthRouter.get('/google/callback', async (req, res, next) => {
 const tokenSchema = z.object({
   grant_type: z.literal('authorization_code'),
   code: z.string(),
-  code_verifier: z.string(),
+  code_verifier: z.string().optional(),
   redirect_uri: z.string().url().optional(),
+  client_id: z.string().optional(),
+  client_secret: z.string().optional(),
 });
 
 oauthRouter.post('/token', async (req, res, next) => {
@@ -126,12 +128,21 @@ oauthRouter.post('/token', async (req, res, next) => {
       return;
     }
 
-    const hash = crypto.createHash('sha256').update(body.code_verifier).digest('base64url');
+    // Validate PKCE only if code_challenge was provided during authorization
+    if (grant.codeChallenge) {
+      if (!body.code_verifier) {
+        grants.delete(body.code);
+        res.status(400).json({ error: 'invalid_request', error_description: 'code_verifier is required when PKCE was used' });
+        return;
+      }
 
-    if (hash !== grant.codeChallenge) {
-      grants.delete(body.code);
-      res.status(400).json({ error: 'invalid_grant', error_description: 'Invalid code verifier' });
-      return;
+      const hash = crypto.createHash('sha256').update(body.code_verifier).digest('base64url');
+
+      if (hash !== grant.codeChallenge) {
+        grants.delete(body.code);
+        res.status(400).json({ error: 'invalid_grant', error_description: 'Invalid code verifier' });
+        return;
+      }
     }
 
     grants.delete(body.code);
