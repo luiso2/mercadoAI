@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { getGoogleTokens, verifyGoogleIdToken } from '../services/googleAuth.js';
 import { User } from '../models/User.js';
 import { signToken } from '../utils/jwt.js';
+import { env } from '../env.js';
 
 export const oauthRouter = Router();
 
@@ -134,9 +135,9 @@ oauthRouter.get('/authorize', (req, res, next) => {
   </div>
 
   <script>
-    const GOOGLE_CLIENT_ID = '${process.env.GOOGLE_CLIENT_ID}';
+    const GOOGLE_CLIENT_ID = '${env.GOOGLE_CLIENT_ID}';
     const STATE = '${params.state}';
-    const BACKEND_URL = '${process.env.BASE_URL || 'https://mercadoai-backend-production.up.railway.app'}';
+    const BACKEND_URL = '${env.BASE_URL}';
 
     function handleCredentialResponse(response) {
       document.getElementById('buttonDiv').style.display = 'none';
