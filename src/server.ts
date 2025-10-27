@@ -97,7 +97,10 @@ app.get('/openapi', (req, res) => {
 });
 
 app.use('/auth', authRouter);
+app.use('/auth', oauthRouter); // Also mount OAuth routes under /auth for compatibility
 app.use('/oauth', oauthRouter);
+app.use('/api/auth', authRouter); // Support /api/auth prefix for ChatGPT compatibility
+app.use('/api/auth', oauthRouter); // Support /api/auth prefix for ChatGPT compatibility
 app.use('/lists', listsRouter);
 app.use('/stores', storesRouter);
 app.use('/compare', compareRouter);
