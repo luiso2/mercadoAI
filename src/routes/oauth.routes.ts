@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
-import { getGoogleAuthUrl, getGoogleTokens, verifyGoogleIdToken } from '../services/googleAuth.js';
+import { getGoogleTokens, verifyGoogleIdToken } from '../services/googleAuth.js';
 import { User } from '../models/User.js';
 import { signToken } from '../utils/jwt.js';
 
@@ -56,7 +56,7 @@ oauthRouter.get('/authorize', (req, res, next) => {
   try {
     const params = authorizeSchema.parse(req.query);
 
-    // Store state in memory instead of session (sessions don't work with OAuth redirects)
+    // Store state in memory for the verify endpoint to use later
     oauthStates.set(params.state, {
       state: params.state,
       redirect_uri: params.redirect_uri,
@@ -64,8 +64,209 @@ oauthRouter.get('/authorize', (req, res, next) => {
       expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
     });
 
-    const googleAuthUrl = getGoogleAuthUrl(params.state);
-    res.redirect(googleAuthUrl);
+    // Return HTML page with Google Sign-In button (client-side OAuth)
+    // This avoids cross-domain redirect issues
+    res.setHeader('Content-Type', 'text/html');
+    res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Authorize Mercado AI</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .container {
+      background: white;
+      padding: 3rem;
+      border-radius: 1rem;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      text-align: center;
+      max-width: 400px;
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 0.5rem;
+      font-size: 1.75rem;
+    }
+    p {
+      color: #666;
+      margin-bottom: 2rem;
+      line-height: 1.6;
+    }
+    #buttonDiv {
+      display: flex;
+      justify-content: center;
+      margin-top: 1.5rem;
+    }
+    .loading {
+      display: none;
+      color: #667eea;
+      margin-top: 1rem;
+    }
+    .error {
+      display: none;
+      color: #e74c3c;
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #ffe6e6;
+      border-radius: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🛒 Mercado AI</h1>
+    <p>Sign in with your Google account to continue</p>
+
+    <div id="buttonDiv"></div>
+    <div class="loading" id="loading">Verifying your account...</div>
+    <div class="error" id="error"></div>
+  </div>
+
+  <script>
+    const GOOGLE_CLIENT_ID = '${process.env.GOOGLE_CLIENT_ID}';
+    const STATE = '${params.state}';
+    const BACKEND_URL = '${process.env.BASE_URL || 'https://mercadoai-backend-production.up.railway.app'}';
+
+    function handleCredentialResponse(response) {
+      document.getElementById('buttonDiv').style.display = 'none';
+      document.getElementById('loading').style.display = 'block';
+
+      // Send ID token to backend for verification
+      fetch(BACKEND_URL + '/oauth/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          idToken: response.credential,
+          state: STATE
+        })
+      })
+      .then(res => {
+        if (!res.ok) {
+          throw new Error('Verification failed');
+        }
+        return res.json();
+      })
+      .then(data => {
+        // Redirect to ChatGPT with the authorization code
+        window.location.href = data.redirect_url;
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = 'Authentication failed. Please try again.';
+      });
+    }
+
+    window.onload = function() {
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleCredentialResponse
+      });
+
+      google.accounts.id.renderButton(
+        document.getElementById('buttonDiv'),
+        {
+          theme: 'outline',
+          size: 'large',
+          text: 'signin_with',
+          shape: 'rectangular',
+          logo_alignment: 'left'
+        }
+      );
+
+      // Also show the One Tap prompt
+      google.accounts.id.prompt();
+    };
+  </script>
+</body>
+</html>
+    `);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// New endpoint to verify ID token from client-side Google Sign-In
+const verifySchema = z.object({
+  idToken: z.string(),
+  state: z.string(),
+});
+
+oauthRouter.post('/verify', async (req, res, next) => {
+  try {
+    const { idToken, state } = verifySchema.parse(req.body);
+
+    // Retrieve state from memory store
+    const oauthState = oauthStates.get(state);
+
+    if (!oauthState) {
+      res.status(400).json({ error: 'invalid_state', error_description: 'Invalid or expired state parameter' });
+      return;
+    }
+
+    // Check expiration
+    if (oauthState.expiresAt < Date.now()) {
+      oauthStates.delete(state);
+      res.status(400).json({ error: 'state_expired', error_description: 'State expired' });
+      return;
+    }
+
+    // Verify ID token with Google
+    const googleUser = await verifyGoogleIdToken(idToken);
+
+    // Create or update user in database
+    let user = await User.findOne({ googleSub: googleUser.googleSub });
+
+    if (!user) {
+      user = await User.create({
+        googleSub: googleUser.googleSub,
+        email: googleUser.email,
+        name: googleUser.name,
+        picture: googleUser.picture,
+      });
+    } else {
+      user.email = googleUser.email;
+      user.name = googleUser.name;
+      user.picture = googleUser.picture;
+      await user.save();
+    }
+
+    // Generate authorization code
+    const grantCode = crypto.randomBytes(32).toString('base64url');
+
+    grants.set(grantCode, {
+      code: grantCode,
+      codeChallenge: oauthState.code_challenge,
+      userId: (user._id as any).toString(),
+      expiresAt: Date.now() + 60 * 1000, // 1 minute
+    });
+
+    // Clean up used state
+    oauthStates.delete(state);
+
+    // Build redirect URL for ChatGPT
+    const redirectUrl = new URL(oauthState.redirect_uri);
+    redirectUrl.searchParams.set('code', grantCode);
+    redirectUrl.searchParams.set('state', state);
+
+    res.json({
+      redirect_url: redirectUrl.toString(),
+      success: true,
+    });
   } catch (error) {
     next(error);
   }
