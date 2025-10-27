@@ -1,0 +1,177 @@
+{
+  "project": "Mercado AI Backend",
+  "lastUpdated": "2025-10-26T22:52:00Z",
+  "totalErrors": 11,
+  "resolvedErrors": 11,
+  "errors": [
+    {
+      "id": 1,
+      "title": "TypeScript Compilation Errors",
+      "category": "TypeScript",
+      "severity": "high",
+      "date": "2025-10-26",
+      "description": "Property '_id' and 'id()' not found on Mongoose types",
+      "error": "error TS2339: Property '_id' does not exist on type 'Document'",
+      "cause": "Mongoose Types not correctly typed for TypeScript inference",
+      "solution": "Use type assertions: (user._id as any).toString() and (list.items as any).id()",
+      "status": "resolved",
+      "files": ["src/routes/lists.routes.ts", "src/routes/oauth.routes.ts"]
+    },
+    {
+      "id": 2,
+      "title": "JWT Sign Function Type Error",
+      "category": "TypeScript",
+      "severity": "medium",
+      "date": "2025-10-26",
+      "description": "Type incompatibility with jsonwebtoken signature",
+      "error": "error TS2345: Argument of type 'JwtPayload' is not assignable",
+      "cause": "Payload type mismatch with jwt.sign expected signature",
+      "solution": "Cast options object: jwt.sign(payload, secret, { ...options } as any)",
+      "status": "resolved",
+      "files": ["src/utils/jwt.ts"]
+    },
+    {
+      "id": 3,
+      "title": "Missing operationId in OpenAPI",
+      "category": "ChatGPT Actions",
+      "severity": "critical",
+      "date": "2025-10-26",
+      "description": "ChatGPT Actions showed 'missing operationId' for all 11 endpoints",
+      "error": "Error: missing operationId; skipping",
+      "cause": "ChatGPT Actions requires unique operationId for each endpoint",
+      "solution": "Added operationId to all endpoints in openapi.yaml",
+      "status": "resolved",
+      "files": ["src/openapi/openapi.yaml", "src/openapi/openapi.json"]
+    },
+    {
+      "id": 4,
+      "title": "OAuth 404 Error - Wrong Repository",
+      "category": "Deployment",
+      "severity": "critical",
+      "date": "2025-10-26",
+      "description": "Railway was deploying Freedumb repository instead of mercadoAI",
+      "error": "Cannot GET /oauth/authorize",
+      "cause": "Git history contained commits from Freedumb project",
+      "solution": "Clean Git history, remove all Freedumb references, force push",
+      "status": "resolved",
+      "files": [".git/*"]
+    },
+    {
+      "id": 5,
+      "title": "Railway Deployment Failure - Missing pnpm-lock.yaml",
+      "category": "Deployment",
+      "severity": "critical",
+      "date": "2025-10-26",
+      "description": "Railway couldn't install dependencies without lockfile",
+      "error": "ERR_PNPM_NO_LOCKFILE Cannot install with frozen-lockfile",
+      "cause": "pnpm-lock.yaml was in .gitignore",
+      "solution": "Remove pnpm-lock.yaml from .gitignore and commit it",
+      "status": "resolved",
+      "files": [".gitignore", "pnpm-lock.yaml"]
+    },
+    {
+      "id": 6,
+      "title": "Missing Root Endpoint",
+      "category": "Deployment",
+      "severity": "high",
+      "date": "2025-10-26",
+      "description": "Railway validation failed, no root endpoint",
+      "error": "Cannot GET /",
+      "cause": "Backend didn't have endpoint at /",
+      "solution": "Added root endpoint with API info and enhanced health check",
+      "status": "resolved",
+      "files": ["src/server.ts"]
+    },
+    {
+      "id": 7,
+      "title": "PKCE Validation Too Strict",
+      "category": "OAuth",
+      "severity": "medium",
+      "date": "2025-10-26",
+      "description": "ChatGPT OAuth failed because PKCE was required",
+      "error": "code_challenge: Required",
+      "cause": "Zod schema required PKCE parameters, ChatGPT doesn't always send them",
+      "solution": "Make code_challenge and code_challenge_method optional",
+      "status": "resolved",
+      "files": ["src/routes/oauth.routes.ts"]
+    },
+    {
+      "id": 8,
+      "title": "Route Path Mismatch",
+      "category": "OAuth",
+      "severity": "medium",
+      "date": "2025-10-26",
+      "description": "ChatGPT calling /api/auth/google/callback but backend only had /oauth/google/callback",
+      "error": "404 Not Found on callback",
+      "cause": "OAuth routes only mounted on /oauth path",
+      "solution": "Mount oauthRouter on multiple paths: /auth, /oauth, /api/auth",
+      "status": "resolved",
+      "files": ["src/server.ts"]
+    },
+    {
+      "id": 9,
+      "title": "Google Redirect URI Not Authorized",
+      "category": "OAuth",
+      "severity": "critical",
+      "date": "2025-10-26",
+      "description": "Google showing redirect_uri_mismatch error",
+      "error": "Error 400: redirect_uri_mismatch",
+      "cause": "Redirect URI not added to Google Cloud Console",
+      "solution": "Add https://mercadoai-backend-production.up.railway.app/oauth/google/callback to Google Console",
+      "status": "resolved",
+      "files": ["Google Cloud Console (external)"]
+    },
+    {
+      "id": 10,
+      "title": "Invalid State Parameter",
+      "category": "OAuth",
+      "severity": "critical",
+      "date": "2025-10-26",
+      "description": "OAuth state lost in cross-domain redirects",
+      "error": "Invalid or expired state parameter",
+      "cause": "State stored in HTTP sessions (cookies) don't persist across domains",
+      "solution": "Replace req.session with in-memory Map storage with expiration",
+      "status": "resolved",
+      "files": ["src/routes/oauth.routes.ts"]
+    },
+    {
+      "id": 11,
+      "title": "Google Client ID Not Interpolating",
+      "category": "OAuth",
+      "severity": "high",
+      "date": "2025-10-26",
+      "description": "Google Sign-In button not appearing, client ID was literal string",
+      "error": "GOOGLE_CLIENT_ID = '${process.env.GOOGLE_CLIENT_ID}' (literal)",
+      "cause": "Template string using process.env directly doesn't interpolate",
+      "solution": "Import env module and use env.GOOGLE_CLIENT_ID instead",
+      "status": "resolved",
+      "files": ["src/routes/oauth.routes.ts"]
+    }
+  ],
+  "statistics": {
+    "byCategory": {
+      "TypeScript": 2,
+      "ChatGPT Actions": 1,
+      "Deployment": 3,
+      "OAuth": 5
+    },
+    "bySeverity": {
+      "critical": 5,
+      "high": 3,
+      "medium": 3
+    },
+    "byStatus": {
+      "resolved": 11,
+      "pending": 0
+    }
+  },
+  "keyLearnings": [
+    "Never use HTTP sessions for OAuth state in cross-domain flows",
+    "Always include lockfiles (pnpm-lock.yaml) in repository",
+    "ChatGPT Actions requires operationId for all endpoints",
+    "PKCE should be optional for ChatGPT compatibility",
+    "Add redirect URIs to Google Console before testing OAuth",
+    "Mount routes on multiple paths for compatibility",
+    "Use in-memory Map or Redis for state that must survive redirects"
+  ]
+}

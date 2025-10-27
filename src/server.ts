@@ -9,6 +9,7 @@ import { oauthRouter } from './routes/oauth.routes.js';
 import { listsRouter } from './routes/lists.routes.js';
 import { storesRouter } from './routes/stores.routes.js';
 import { compareRouter } from './routes/compare.routes.js';
+import { errorsRouter } from './routes/errors.routes.js';
 import { errorHandler } from './middlewares/error.js';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -56,6 +57,7 @@ app.get('/', (_req, res) => {
       lists: '/lists',
       stores: '/stores/search',
       compare: '/compare/search',
+      errors: '/errors',
     },
   });
 });
@@ -104,6 +106,7 @@ app.use('/api/auth', oauthRouter); // Support /api/auth prefix for ChatGPT compa
 app.use('/lists', listsRouter);
 app.use('/stores', storesRouter);
 app.use('/compare', compareRouter);
+app.use('/errors', errorsRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
