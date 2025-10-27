@@ -1,0 +1,734 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Market Backend API",
+    "description": "Shopping list management backend with Google OAuth and JWT authentication",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://mercadoai-backend-production.up.railway.app",
+      "description": "Production server"
+    },
+    {
+      "url": "http://localhost:8080",
+      "description": "Development server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "List": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "description": "Unique identifier for the list"
+          },
+          "userId": {
+            "type": "string",
+            "description": "ID of the user who owns the list"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the shopping list"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Item"
+            },
+            "description": "Array of items in the list"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when list was created"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when list was last updated"
+          }
+        }
+      },
+      "Item": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "description": "Unique identifier for the item"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the item"
+          },
+          "qty": {
+            "type": "number",
+            "description": "Quantity of the item",
+            "default": 1
+          },
+          "unit": {
+            "type": "string",
+            "description": "Unit of measurement",
+            "default": "unit"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Additional notes about the item"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "bought", "skipped"],
+            "description": "Current status of the item",
+            "default": "pending"
+          },
+          "category": {
+            "type": "string",
+            "description": "Category of the item"
+          },
+          "storeHint": {
+            "type": "string",
+            "description": "Hint about which store to find the item"
+          },
+          "price": {
+            "type": "number",
+            "description": "Price of the item"
+          }
+        },
+        "required": ["name"]
+      },
+      "StoreItem": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the product"
+          },
+          "price": {
+            "type": "number",
+            "description": "Price of the product"
+          },
+          "unit": {
+            "type": "string",
+            "description": "Unit of measurement"
+          },
+          "store": {
+            "type": "string",
+            "description": "Name of the store"
+          },
+          "availability": {
+            "type": "string",
+            "enum": ["in_stock", "out_of_stock", "limited"],
+            "description": "Availability status"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "User ID"
+          },
+          "email": {
+            "type": "string",
+            "description": "User email"
+          },
+          "name": {
+            "type": "string",
+            "description": "User name"
+          },
+          "picture": {
+            "type": "string",
+            "description": "User profile picture URL"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "description": "Check if the API is running",
+        "operationId": "healthCheck",
+        "security": [],
+        "tags": ["Health"],
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/google/verify": {
+      "post": {
+        "summary": "Verify Google ID token and get JWT",
+        "description": "Authenticate using a Google ID token and receive a JWT for API access",
+        "operationId": "verifyGoogleToken",
+        "security": [],
+        "tags": ["Authentication"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["idToken"],
+                "properties": {
+                  "idToken": {
+                    "type": "string",
+                    "description": "Google ID token from client-side authentication"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authentication successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "description": "JWT token for API authentication"
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lists": {
+      "get": {
+        "summary": "Get all lists for authenticated user",
+        "description": "Retrieve all shopping lists belonging to the authenticated user",
+        "operationId": "getLists",
+        "tags": ["Lists"],
+        "responses": {
+          "200": {
+            "description": "List of shopping lists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/List"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing JWT token"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new shopping list",
+        "description": "Create a new shopping list for the authenticated user",
+        "operationId": "createList",
+        "tags": ["Lists"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "Title for the shopping list",
+                    "default": "Shopping List"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "List created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing JWT token"
+          }
+        }
+      }
+    },
+    "/lists/{id}": {
+      "get": {
+        "summary": "Get a specific list",
+        "description": "Retrieve details of a specific shopping list",
+        "operationId": "getListById",
+        "tags": ["Lists"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID of the shopping list",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shopping list details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "List not found"
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing JWT token"
+          }
+        }
+      }
+    },
+    "/lists/{id}/items": {
+      "post": {
+        "summary": "Add item to list",
+        "description": "Add a new item to a shopping list",
+        "operationId": "addItemToList",
+        "tags": ["Items"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID of the shopping list",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Name of the item"
+                  },
+                  "qty": {
+                    "type": "number",
+                    "description": "Quantity",
+                    "default": 1
+                  },
+                  "unit": {
+                    "type": "string",
+                    "description": "Unit of measurement",
+                    "default": "unit"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Additional notes"
+                  },
+                  "category": {
+                    "type": "string",
+                    "description": "Category"
+                  },
+                  "storeHint": {
+                    "type": "string",
+                    "description": "Store suggestion"
+                  },
+                  "price": {
+                    "type": "number",
+                    "description": "Price"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Item added successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "List not found"
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing JWT token"
+          }
+        }
+      }
+    },
+    "/lists/{id}/items/{itemId}": {
+      "patch": {
+        "summary": "Update an item",
+        "description": "Update item details, including marking as bought or skipped",
+        "operationId": "updateItem",
+        "tags": ["Items"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID of the shopping list",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "itemId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the item to update",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Name of the item"
+                  },
+                  "qty": {
+                    "type": "number",
+                    "description": "Quantity"
+                  },
+                  "unit": {
+                    "type": "string",
+                    "description": "Unit of measurement"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Additional notes"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["pending", "bought", "skipped"],
+                    "description": "Status of the item"
+                  },
+                  "category": {
+                    "type": "string",
+                    "description": "Category"
+                  },
+                  "storeHint": {
+                    "type": "string",
+                    "description": "Store suggestion"
+                  },
+                  "price": {
+                    "type": "number",
+                    "description": "Price"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Item updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "List or item not found"
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing JWT token"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove an item from list",
+        "description": "Delete an item from the shopping list",
+        "operationId": "deleteItem",
+        "tags": ["Items"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID of the shopping list",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "itemId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the item to delete",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Item removed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "List or item not found"
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing JWT token"
+          }
+        }
+      }
+    },
+    "/lists/{id}/suggest": {
+      "get": {
+        "summary": "Get item suggestions",
+        "description": "Get smart suggestions for items to add based on current list contents",
+        "operationId": "getSuggestions",
+        "tags": ["Lists"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID of the shopping list",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Suggestions generated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "suggestions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Array of suggested items"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "List not found"
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing JWT token"
+          }
+        }
+      }
+    },
+    "/stores/search": {
+      "get": {
+        "summary": "Search for items in stores",
+        "description": "Search for products in stores (mock provider)",
+        "operationId": "searchStores",
+        "tags": ["Stores"],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "Search query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "zip",
+            "in": "query",
+            "required": false,
+            "description": "ZIP code for location-based search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "description": "Store provider",
+            "schema": {
+              "type": "string",
+              "default": "mock"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/StoreItem"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing JWT token"
+          }
+        }
+      }
+    },
+    "/compare/search": {
+      "get": {
+        "summary": "Compare prices across providers",
+        "description": "Compare product prices across multiple store providers",
+        "operationId": "comparePrices",
+        "tags": ["Stores"],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "Search query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "zip",
+            "in": "query",
+            "required": false,
+            "description": "ZIP code for location-based search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "providers",
+            "in": "query",
+            "required": false,
+            "description": "Comma-separated list of providers",
+            "schema": {
+              "type": "string",
+              "default": "mock"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comparison results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "query": {
+                      "type": "string",
+                      "description": "Search query used"
+                    },
+                    "zip": {
+                      "type": "string",
+                      "description": "ZIP code used"
+                    },
+                    "providers": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Providers queried"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/StoreItem"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing JWT token"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,389 @@
+openapi: 3.1.0
+info:
+  title: Market Backend API
+  version: 1.0.0
+  description: Shopping list management backend with Google OAuth and JWT authentication
+
+servers:
+  - url: https://mercadoai-backend-production.up.railway.app
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    List:
+      type: object
+      properties:
+        _id:
+          type: string
+        userId:
+          type: string
+        title:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Item:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        qty:
+          type: number
+        unit:
+          type: string
+        notes:
+          type: string
+        status:
+          type: string
+          enum: [pending, bought, skipped]
+        category:
+          type: string
+        storeHint:
+          type: string
+        price:
+          type: number
+
+    StoreItem:
+      type: object
+      properties:
+        name:
+          type: string
+        price:
+          type: number
+        unit:
+          type: string
+        store:
+          type: string
+        availability:
+          type: string
+          enum: [in_stock, out_of_stock, limited]
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /auth/google/verify:
+    post:
+      operationId: verifyGoogleToken
+      summary: Verify Google ID token and get JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - idToken
+              properties:
+                idToken:
+                  type: string
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+                      name:
+                        type: string
+                      picture:
+                        type: string
+
+  /lists:
+    get:
+      operationId: getLists
+      summary: Get all lists for authenticated user
+      responses:
+        '200':
+          description: List of shopping lists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/List'
+
+    post:
+      operationId: createList
+      summary: Create a new shopping list
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+      responses:
+        '201':
+          description: List created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/List'
+
+  /lists/{id}:
+    get:
+      operationId: getListById
+      summary: Get a specific list
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Shopping list details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/List'
+        '404':
+          description: List not found
+
+  /lists/{id}/items:
+    post:
+      operationId: addItemToList
+      summary: Add item to list
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                qty:
+                  type: number
+                unit:
+                  type: string
+                notes:
+                  type: string
+                category:
+                  type: string
+                storeHint:
+                  type: string
+                price:
+                  type: number
+      responses:
+        '201':
+          description: Item added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/List'
+
+  /lists/{id}/items/{itemId}:
+    patch:
+      operationId: updateItem
+      summary: Update an item (mark as bought, etc.)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                qty:
+                  type: number
+                unit:
+                  type: string
+                notes:
+                  type: string
+                status:
+                  type: string
+                  enum: [pending, bought, skipped]
+                category:
+                  type: string
+                storeHint:
+                  type: string
+                price:
+                  type: number
+      responses:
+        '200':
+          description: Item updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/List'
+
+    delete:
+      operationId: deleteItem
+      summary: Remove an item from list
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/List'
+
+  /lists/{id}/suggest:
+    get:
+      operationId: getSuggestions
+      summary: Get item suggestions based on current list
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  suggestions:
+                    type: array
+                    items:
+                      type: string
+
+  /stores/search:
+    get:
+      operationId: searchStores
+      summary: Search for items in stores (mock provider)
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: zip
+          in: query
+          schema:
+            type: string
+        - name: provider
+          in: query
+          schema:
+            type: string
+            default: mock
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StoreItem'
+
+  /compare/search:
+    get:
+      operationId: comparePrices
+      summary: Compare prices across providers
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: zip
+          in: query
+          schema:
+            type: string
+        - name: providers
+          in: query
+          schema:
+            type: string
+            default: mock
+      responses:
+        '200':
+          description: Comparison results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                  zip:
+                    type: string
+                  providers:
+                    type: array
+                    items:
+                      type: string
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StoreItem'
