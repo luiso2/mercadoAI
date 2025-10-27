@@ -16,6 +16,32 @@ interface OAuthGrant {
 
 const grants = new Map<string, OAuthGrant>();
 
+// Store OAuth state temporarily (for redirect flow)
+interface OAuthState {
+  state: string;
+  redirect_uri: string;
+  code_challenge?: string;
+  expiresAt: number;
+}
+
+const oauthStates = new Map<string, OAuthState>();
+
+// Clean up expired states every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [state, data] of oauthStates.entries()) {
+    if (data.expiresAt < now) {
+      oauthStates.delete(state);
+    }
+  }
+  // Also clean expired grants
+  for (const [code, grant] of grants.entries()) {
+    if (grant.expiresAt < now) {
+      grants.delete(code);
+    }
+  }
+}, 5 * 60 * 1000);
+
 const authorizeSchema = z.object({
   response_type: z.literal('code'),
   client_id: z.string(),
@@ -30,11 +56,13 @@ oauthRouter.get('/authorize', (req, res, next) => {
   try {
     const params = authorizeSchema.parse(req.query);
 
-    (req.session as any).oauthState = {
+    // Store state in memory instead of session (sessions don't work with OAuth redirects)
+    oauthStates.set(params.state, {
       state: params.state,
       redirect_uri: params.redirect_uri,
       code_challenge: params.code_challenge,
-    };
+      expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
+    });
 
     const googleAuthUrl = getGoogleAuthUrl(params.state);
     res.redirect(googleAuthUrl);
@@ -51,10 +79,21 @@ oauthRouter.get('/google/callback', async (req, res, next) => {
       throw new Error('Missing authorization code');
     }
 
-    const oauthState = (req.session as any).oauthState;
+    if (!state || typeof state !== 'string') {
+      throw new Error('Missing state parameter');
+    }
 
-    if (!oauthState || oauthState.state !== state) {
-      throw new Error('Invalid state parameter');
+    // Retrieve state from memory store
+    const oauthState = oauthStates.get(state);
+
+    if (!oauthState) {
+      throw new Error('Invalid or expired state parameter');
+    }
+
+    // Check expiration
+    if (oauthState.expiresAt < Date.now()) {
+      oauthStates.delete(state);
+      throw new Error('State expired');
     }
 
     const tokens = await getGoogleTokens(code);
@@ -90,11 +129,12 @@ oauthRouter.get('/google/callback', async (req, res, next) => {
       expiresAt: Date.now() + 60 * 1000,
     });
 
-    delete (req.session as any).oauthState;
+    // Clean up used state
+    oauthStates.delete(state);
 
     const redirectUrl = new URL(oauthState.redirect_uri);
     redirectUrl.searchParams.set('code', grantCode);
-    redirectUrl.searchParams.set('state', state as string);
+    redirectUrl.searchParams.set('state', state);
 
     res.redirect(redirectUrl.toString());
   } catch (error) {
